@@ -62,6 +62,9 @@ private:
     bool clickButton(Qt::MouseButtons b, Button btn);
     bool updateButtonHoverState(Button hoveredButton);
 
+    bool titlebarHidden() const;
+    void updateTitlebarHiddenState();
+
     QRectF closeButtonRect() const;
     QRectF maximizeButtonRect() const;
     QRectF minimizeButtonRect() const;
@@ -89,6 +92,9 @@ private:
     Button m_clicking = None;
 
     GnomeHintsSettings *m_hints;
+
+    bool m_hideTitlebarWhenMaximized;
+    bool m_titlebarHidden;
 };
 
 

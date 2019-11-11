@@ -42,6 +42,8 @@
 
 #include "gnomehintssettings.h"
 
+#include <QtGlobal>
+
 #include <QtGui/QColor>
 #include <QtGui/QCursor>
 #include <QtGui/QLinearGradient>
@@ -108,6 +110,9 @@ QGnomePlatformDecoration::QGnomePlatformDecoration()
     QTextOption option(Qt::AlignHCenter | Qt::AlignVCenter);
     option.setWrapMode(QTextOption::NoWrap);
     m_windowTitle.setTextOption(option);
+
+    m_titlebarHidden = false;
+    m_hideTitlebarWhenMaximized = !qEnvironmentVariableIsEmpty("QT_GNOMEPLATFORM_HIDE_TITLEBAR_WHEN_MAXIMIZED");
 }
 
 QGnomePlatformDecoration::~QGnomePlatformDecoration()
@@ -191,11 +196,17 @@ QRectF QGnomePlatformDecoration::minimizeButtonRect() const
 
 QMargins QGnomePlatformDecoration::margins() const
 {
+    if (titlebarHidden())
+        return QMargins(0, 0, 0, 0);
     return QMargins(1, 38, 1, 1);
 }
 
 void QGnomePlatformDecoration::paint(QPaintDevice *device)
 {
+    updateTitlebarHiddenState();
+    if (m_titlebarHidden)
+        return;
+
     bool active = window()->handle()->isActive();
     QRect surfaceRect(QPoint(), window()->frameGeometry().size());
 
@@ -569,4 +580,20 @@ bool QGnomePlatformDecoration::updateButtonHoverState(Button hoveredButton)
     }
 #endif
     return false;
+}
+
+bool QGnomePlatformDecoration::titlebarHidden() const
+{
+    return m_hideTitlebarWhenMaximized && (window()->windowStates() & Qt::WindowMaximized);
+}
+
+void QGnomePlatformDecoration::updateTitlebarHiddenState()
+{
+    bool currentTitlebarHidden = titlebarHidden();
+    if (m_titlebarHidden != currentTitlebarHidden) {
+        // Probably an awful hack, but we need QtWayland to notice our update of margins()
+        // Otherwise the margins will be updated when the window next loses/gains focus.
+        waylandWindow()->applyConfigureWhenPossible();
+        m_titlebarHidden = currentTitlebarHidden;
+    }
 }
