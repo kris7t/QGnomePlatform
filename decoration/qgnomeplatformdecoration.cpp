@@ -42,7 +42,7 @@
 
 #include "gnomehintssettings.h"
 
-#include <QtGlobal>
+#include <QSettings>
 
 #include <QtGui/QColor>
 #include <QtGui/QCursor>
@@ -102,8 +102,12 @@ QGnomePlatformDecoration::QGnomePlatformDecoration()
     , m_minimizeButtonHovered(false)
     , m_hints(new GnomeHintsSettings)
 {
+    QSettings settings("FedoraQt", "QGnomePlatform");
+    settings.beginGroup("Decoration");
+
+    calculateUseDarkTheme(settings);
     initializeButtonPixmaps();
-    initializeColors();
+    initializeColors(settings);
 
     m_lastButtonClick = QDateTime::currentDateTime();
 
@@ -112,7 +116,7 @@ QGnomePlatformDecoration::QGnomePlatformDecoration()
     m_windowTitle.setTextOption(option);
 
     m_titlebarHidden = false;
-    m_hideTitlebarWhenMaximized = !qEnvironmentVariableIsEmpty("QT_GNOMEPLATFORM_HIDE_TITLEBAR_WHEN_MAXIMIZED");
+    m_hideTitlebarWhenMaximized = settings.value("HideTitlebarWhenMaximized", false).toBool();
 }
 
 QGnomePlatformDecoration::~QGnomePlatformDecoration()
@@ -120,12 +124,27 @@ QGnomePlatformDecoration::~QGnomePlatformDecoration()
     delete m_hints;
 }
 
+void QGnomePlatformDecoration::calculateUseDarkTheme(const QSettings &settings)
+{
+    const UseDarkTheme darkThemePreference = settings.value("DarkTheme", QVariant::fromValue(UseDarkTheme::WhenPreferred)).value<UseDarkTheme>();
+    switch (darkThemePreference) {
+        case UseDarkTheme::Never:
+            m_useDarkTheme = false;
+            break;
+        case UseDarkTheme::WhenPreferred:
+            m_useDarkTheme = m_hints->gtkThemeDarkVariant();
+            break;
+        case UseDarkTheme::Always:
+            m_useDarkTheme = true;
+            break;
+        default:
+            qFatal("Unknown dark theme pereference");
+            break;
+    }
+}
+
 void QGnomePlatformDecoration::initializeButtonPixmaps()
 {
-    const QString iconTheme = m_hints->hint(QPlatformTheme::SystemIconThemeName).toString();
-    const bool isAdwaitaIconTheme = iconTheme.toLower() == QStringLiteral("adwaita");
-    const bool isDarkVariant = m_hints->gtkThemeDarkVariant();
-
     QIcon::setThemeName(m_hints->hint(QPlatformTheme::SystemIconThemeName).toString());
 
     QPixmap closeIcon = QIcon::fromTheme(QStringLiteral("window-close-symbolic"), QIcon::fromTheme(QStringLiteral("window-close"))).pixmap(QSize(16, 16));
@@ -133,22 +152,35 @@ void QGnomePlatformDecoration::initializeButtonPixmaps()
     QPixmap minimizeIcon = QIcon::fromTheme(QStringLiteral("window-minimize-symbolic"), QIcon::fromTheme(QStringLiteral("window-minimize"))).pixmap(QSize(16, 16));
     QPixmap restoreIcon = QIcon::fromTheme(QStringLiteral("window-restore-symbolic"), QIcon::fromTheme(QStringLiteral("window-restore"))).pixmap(QSize(16, 16));
 
-    m_buttonPixmaps.insert(Button::Close, isAdwaitaIconTheme && isDarkVariant ? pixmapDarkVariant(closeIcon) : closeIcon);
-    m_buttonPixmaps.insert(Button::Maximize, isAdwaitaIconTheme && isDarkVariant ? pixmapDarkVariant(maximizeIcon) : maximizeIcon);
-    m_buttonPixmaps.insert(Button::Minimize, isAdwaitaIconTheme && isDarkVariant ? pixmapDarkVariant(minimizeIcon) : minimizeIcon);
-    m_buttonPixmaps.insert(Button::Restore, isAdwaitaIconTheme && isDarkVariant ? pixmapDarkVariant(restoreIcon) : restoreIcon);
+    m_buttonPixmaps.insert(Button::Close, m_useDarkTheme ? pixmapDarkVariant(closeIcon) : closeIcon);
+    m_buttonPixmaps.insert(Button::Maximize, m_useDarkTheme ? pixmapDarkVariant(maximizeIcon) : maximizeIcon);
+    m_buttonPixmaps.insert(Button::Minimize, m_useDarkTheme ? pixmapDarkVariant(minimizeIcon) : minimizeIcon);
+    m_buttonPixmaps.insert(Button::Restore, m_useDarkTheme ? pixmapDarkVariant(restoreIcon) : restoreIcon);
 }
 
-void QGnomePlatformDecoration::initializeColors()
+void QGnomePlatformDecoration::initializeColors(const QSettings &settings)
 {
-    const bool darkVariant = m_hints->gtkThemeDarkVariant();
-    m_foregroundColor         = darkVariant ? QColor("#eeeeec") : QColor("#2e3436"); // Adwaita fg_color
-    m_backgroundColorStart    = darkVariant ? QColor("#262626") : QColor("#dad6d2"); // Adwaita GtkHeaderBar color
-    m_backgroundColorEnd      = darkVariant ? QColor("#2b2b2b") : QColor("#e1dedb"); // Adwaita GtkHeaderBar color
-    m_foregroundInactiveColor = darkVariant ? QColor("#919190") : QColor("#929595");
-    m_backgroundInactiveColor = darkVariant ? QColor("#353535") : QColor("#f6f5f4");
-    m_borderColor             = darkVariant ? transparentize(QColor("#1b1b1b"), 0.1) : transparentize(QColor("black"), 0.77);
-    m_borderInactiveColor     = darkVariant ? transparentize(QColor("#1b1b1b"), 0.1) : transparentize(QColor("black"), 0.82);
+    if (m_useDarkTheme) {
+        m_foregroundColor = settings.value("Colors/Dark/Foreground", QColor("#eeeeec")).value<QColor>();
+        m_backgroundColorStart = settings.value("Colors/Dark/BackgroundStart", QColor("#262626")).value<QColor>();
+        m_backgroundColorEnd = settings.value("Colors/Dark/BackgroundEnd", QColor("#2b2b2b")).value<QColor>();
+        m_foregroundInactiveColor = settings.value("Colors/Dark/ForegroundInactive", QColor("#919190")).value<QColor>();
+        m_backgroundInactiveColor = settings.value("Colors/Dark/BackgroundInactive", QColor("#353535")).value<QColor>();
+        m_borderColor = settings.value("Colors/Dark/Border", transparentize(QColor("#1b1b1b"), 0.1)).value<QColor>();
+        m_borderInactiveColor = settings.value("Colors/Dark/BorderInactive", transparentize(QColor("#1b1b1b"), 0.1)).value<QColor>();
+        m_buttonHoverColor = settings.value("Colors/Dark/ButtonHover", darken(desaturate(QColor("#3d3846"), 1.0), 0.04)).value<QColor>();
+        m_buttonHoverBorderColor = settings.value("Colors/Dark/ButtonHoverBorder", darken(m_buttonHoverColor, 0.1)).value<QColor>();
+    } else {
+        m_foregroundColor = settings.value("Colors/Foreground", QColor("#2e3436")).value<QColor>();
+        m_backgroundColorStart = settings.value("Colors/BackgroundStart", QColor("#dad6d2")).value<QColor>();
+        m_backgroundColorEnd = settings.value("Colors/BackgroundEnd", QColor("#e1dedb")).value<QColor>();
+        m_foregroundInactiveColor = settings.value("Colors/ForegroundInactive", QColor("#929595")).value<QColor>();
+        m_backgroundInactiveColor = settings.value("Colors/BackgroundInactive", QColor("#f6f5f4")).value<QColor>();
+        m_borderColor = settings.value("Colors/Border", transparentize(QColor("black"), 0.77)).value<QColor>();
+        m_borderInactiveColor = settings.value("Colors/BorderInactive", transparentize(QColor("black"), 0.82)).value<QColor>();
+        m_buttonHoverColor = settings.value("Colors/ButtonHover", QColor("#f6f5f4")).value<QColor>();
+        m_buttonHoverBorderColor = settings.value("Colors/ButtonHoverBorder", darken(m_buttonHoverColor, 0.18)).value<QColor>();
+    }
 }
 
 QPixmap QGnomePlatformDecoration::pixmapDarkVariant(const QPixmap &pixmap)
@@ -279,20 +311,6 @@ void QGnomePlatformDecoration::paint(QPaintDevice *device)
 
     QRectF rect;
 
-    // From adwaita-qt
-    QColor windowColor;
-    QColor buttonHoverBorderColor;
-    // QColor buttonHoverFrameColor;
-    if (m_hints->gtkThemeDarkVariant()) {
-        windowColor = darken(desaturate(QColor("#3d3846"), 1.0), 0.04);
-        buttonHoverBorderColor = darken(windowColor, 0.1);
-        // buttonHoverFrameColor = darken(windowColor, 0.01);
-    } else {
-        windowColor = QColor("#f6f5f4");
-        buttonHoverBorderColor = darken(windowColor, 0.18);
-        // buttonHoverFrameColor = darken(windowColor, 0.04);
-    }
-
     // Close button
     p.save();
     rect = closeButtonRect();
@@ -300,11 +318,11 @@ void QGnomePlatformDecoration::paint(QPaintDevice *device)
         QRectF buttonRect(rect.x() - 0.5, rect.y() - 0.5, 28, 28);
         // QLinearGradient buttonGradient(buttonRect.bottomLeft(), buttonRect.topLeft());
         // buttonGradient.setColorAt(0, buttonHoverFrameColor);
-        // buttonGradient.setColorAt(1, windowColor);
+        // buttonGradient.setColorAt(1, m_buttonHoverColor);
         QPainterPath path;
         path.addRoundedRect(buttonRect, 4, 4);
-        p.setPen(QPen(buttonHoverBorderColor, 1.0));
-        p.fillPath(path, windowColor);
+        p.setPen(QPen(m_buttonHoverBorderColor, 1.0));
+        p.fillPath(path, m_buttonHoverColor);
         p.drawPath(path);
     }
     p.drawPixmap(QPoint(rect.x() + 6, rect.y() + 6), m_buttonPixmaps[Button::Close]);
@@ -319,11 +337,11 @@ void QGnomePlatformDecoration::paint(QPaintDevice *device)
             QRectF buttonRect(rect.x() - 0.5, rect.y() - 0.5, 28, 28);
             // QLinearGradient buttonGradient(buttonRect.bottomLeft(), buttonRect.topLeft());
             // buttonGradient.setColorAt(0, buttonHoverFrameColor);
-            // buttonGradient.setColorAt(1, windowColor);
+            // buttonGradient.setColorAt(1, m_buttonHoverColor);
             QPainterPath path;
             path.addRoundedRect(buttonRect, 4, 4);
-            p.setPen(QPen(buttonHoverBorderColor, 1.0));
-            p.fillPath(path, windowColor);
+            p.setPen(QPen(m_buttonHoverBorderColor, 1.0));
+            p.fillPath(path, m_buttonHoverColor);
             p.drawPath(path);
         }
         if ((window()->windowStates() & Qt::WindowMaximized)) {
@@ -342,11 +360,11 @@ void QGnomePlatformDecoration::paint(QPaintDevice *device)
             QRectF buttonRect(rect.x() - 0.5, rect.y() - 0.5, 28, 28);
             // QLinearGradient buttonGradient(buttonRect.bottomLeft(), buttonRect.topLeft());
             // buttonGradient.setColorAt(0, buttonHoverFrameColor);
-            // buttonGradient.setColorAt(1, windowColor);
+            // buttonGradient.setColorAt(1, m_buttonHoverColor);
             QPainterPath path;
             path.addRoundedRect(buttonRect, 4, 4);
-            p.setPen(QPen(buttonHoverBorderColor, 1.0));
-            p.fillPath(path, windowColor);
+            p.setPen(QPen(m_buttonHoverBorderColor, 1.0));
+            p.fillPath(path, m_buttonHoverColor);
             p.drawPath(path);
         }
         p.drawPixmap(QPoint(rect.x() + 5, rect.y() + 5), m_buttonPixmaps[Button::Minimize]);

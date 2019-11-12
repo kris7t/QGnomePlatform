@@ -28,6 +28,7 @@
 
 class GnomeHintsSettings;
 class QPixmap;
+class QSettings;
 
 using namespace QtWaylandClient;
 
@@ -51,8 +52,9 @@ protected:
     bool handleMouse(QWaylandInputDevice *inputDevice, const QPointF &local, const QPointF &global,Qt::MouseButtons b,Qt::KeyboardModifiers mods) override;
     bool handleTouch(QWaylandInputDevice *inputDevice, const QPointF &local, const QPointF &global, Qt::TouchPointState state, Qt::KeyboardModifiers mods) override;
 private:
+    void calculateUseDarkTheme(const QSettings &settings);
     void initializeButtonPixmaps();
-    void initializeColors();
+    void initializeColors(const QSettings &settings);
     QPixmap pixmapDarkVariant(const QPixmap &pixmap);
 
     void processMouseTop(QWaylandInputDevice *inputDevice, const QPointF &local, Qt::MouseButtons b,Qt::KeyboardModifiers mods);
@@ -70,6 +72,7 @@ private:
     QRectF minimizeButtonRect() const;
 
     // Colors
+    bool m_useDarkTheme;
     QColor m_backgroundColorStart;
     QColor m_backgroundColorEnd;
     QColor m_backgroundInactiveColor;
@@ -77,6 +80,8 @@ private:
     QColor m_borderInactiveColor;
     QColor m_foregroundColor;
     QColor m_foregroundInactiveColor;
+    QColor m_buttonHoverColor;
+    QColor m_buttonHoverBorderColor;
 
     // Buttons
     QHash<Button, QPixmap> m_buttonPixmaps;
@@ -95,6 +100,14 @@ private:
 
     bool m_hideTitlebarWhenMaximized;
     bool m_titlebarHidden;
+
+    enum UseDarkTheme
+    {
+        Never,
+        WhenPreferred,
+        Always
+    };
+    Q_ENUM(UseDarkTheme)
 };
 
 
