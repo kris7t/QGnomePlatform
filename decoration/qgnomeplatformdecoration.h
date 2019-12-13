@@ -53,6 +53,7 @@ protected:
     bool handleTouch(QWaylandInputDevice *inputDevice, const QPointF &local, const QPointF &global, Qt::TouchPointState state, Qt::KeyboardModifiers mods) override;
 private:
     void calculateUseDarkTheme(const QSettings &settings);
+    void initializeGeometry(const QSettings &settings);
     void initializeButtonPixmaps();
     void initializeColors(const QSettings &settings);
     QPixmap pixmapDarkVariant(const QPixmap &pixmap);
@@ -71,6 +72,12 @@ private:
     QRectF maximizeButtonRect() const;
     QRectF minimizeButtonRect() const;
 
+    // Geometry
+    int m_borderWidth;
+    int m_titlebarHeight;
+    int m_titlebarRadius;
+    int m_highlightWidth;
+
     // Colors
     bool m_useDarkTheme;
     QColor m_backgroundColorStart;
@@ -82,6 +89,8 @@ private:
     QColor m_foregroundInactiveColor;
     QColor m_buttonHoverColor;
     QColor m_buttonHoverBorderColor;
+    QColor m_highlightColor;
+    QColor m_highlightInactiveColor;
 
     // Buttons
     QHash<Button, QPixmap> m_buttonPixmaps;
@@ -101,7 +110,7 @@ private:
     bool m_hideTitlebarWhenMaximized;
     bool m_titlebarHidden;
 
-    enum UseDarkTheme
+    enum class UseDarkTheme
     {
         Never,
         WhenPreferred,

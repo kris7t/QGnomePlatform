@@ -106,6 +106,7 @@ QGnomePlatformDecoration::QGnomePlatformDecoration()
     settings.beginGroup("Decoration");
 
     calculateUseDarkTheme(settings);
+    initializeGeometry(settings);
     initializeButtonPixmaps();
     initializeColors(settings);
 
@@ -138,9 +139,17 @@ void QGnomePlatformDecoration::calculateUseDarkTheme(const QSettings &settings)
             m_useDarkTheme = true;
             break;
         default:
-            qFatal("Unknown dark theme pereference");
+            qFatal("Unknown dark theme preference");
             break;
     }
+}
+
+void QGnomePlatformDecoration::initializeGeometry(const QSettings &settings)
+{
+    m_borderWidth = settings.value("BorderWidth", 1).toInt();
+    m_titlebarHeight = settings.value("TitlebarHeight", 37).toInt();
+    m_titlebarRadius = settings.value("TitlebarRadius", 8).toInt();
+    m_highlightWidth = settings.value("HighlightWidth", 0).toInt();
 }
 
 void QGnomePlatformDecoration::initializeButtonPixmaps()
@@ -170,6 +179,8 @@ void QGnomePlatformDecoration::initializeColors(const QSettings &settings)
         m_borderInactiveColor = settings.value("Colors/Dark/BorderInactive", transparentize(QColor("#1b1b1b"), 0.1)).value<QColor>();
         m_buttonHoverColor = settings.value("Colors/Dark/ButtonHover", darken(desaturate(QColor("#3d3846"), 1.0), 0.04)).value<QColor>();
         m_buttonHoverBorderColor = settings.value("Colors/Dark/ButtonHoverBorder", darken(m_buttonHoverColor, 0.1)).value<QColor>();
+        m_highlightColor = settings.value("Colors/Dark/Highlight", QColor("#ffffff")).value<QColor>();
+        m_highlightInactiveColor = settings.value("Colors/Dark/HighlightInactive", QColor("#ffffff")).value<QColor>();
     } else {
         m_foregroundColor = settings.value("Colors/Foreground", QColor("#2e3436")).value<QColor>();
         m_backgroundColorStart = settings.value("Colors/BackgroundStart", QColor("#dad6d2")).value<QColor>();
@@ -180,6 +191,8 @@ void QGnomePlatformDecoration::initializeColors(const QSettings &settings)
         m_borderInactiveColor = settings.value("Colors/BorderInactive", transparentize(QColor("black"), 0.82)).value<QColor>();
         m_buttonHoverColor = settings.value("Colors/ButtonHover", QColor("#f6f5f4")).value<QColor>();
         m_buttonHoverBorderColor = settings.value("Colors/ButtonHoverBorder", darken(m_buttonHoverColor, 0.18)).value<QColor>();
+        m_highlightColor = settings.value("Colors/Highlight", QColor("#ffffff")).value<QColor>();
+        m_highlightInactiveColor = settings.value("Colors/HighlightInactive", QColor("#ffffff")).value<QColor>();
     }
 }
 
@@ -230,7 +243,7 @@ QMargins QGnomePlatformDecoration::margins() const
 {
     if (titlebarHidden())
         return QMargins(0, 0, 0, 0);
-    return QMargins(1, 38, 1, 1);
+    return QMargins(m_borderWidth, m_titlebarHeight + m_borderWidth, m_borderWidth, m_borderWidth);
 }
 
 void QGnomePlatformDecoration::paint(QPaintDevice *device)
@@ -247,21 +260,46 @@ void QGnomePlatformDecoration::paint(QPaintDevice *device)
 
     // Title bar (border)
     QPainterPath borderRect;
-    if ((window()->windowStates() & Qt::WindowMaximized))
-        borderRect.addRect(0, 0, surfaceRect.width(), margins().top() + 8);
-    else
-        borderRect.addRoundedRect(0, 0, surfaceRect.width(), margins().top() + 8, 10, 10);
+    if ((window()->windowStates() & Qt::WindowMaximized)) {
+        borderRect.addRect(0, 0, surfaceRect.width(), margins().top() + m_titlebarRadius);
+    } else {
+        int outerRadius = m_titlebarRadius + m_borderWidth;
+        borderRect.addRoundedRect(0, 0, surfaceRect.width(), margins().top() + outerRadius, outerRadius, outerRadius);
+    }
 
     p.fillPath(borderRect.simplified(), active ? m_borderColor : m_borderInactiveColor);
 
+    // Highlight
+    if (m_highlightWidth > 0) {
+        QPainterPath highlightRect;
+        if ((window()->windowStates() & Qt::WindowMaximized)) {
+            highlightRect.addRect(m_borderWidth, m_borderWidth,
+                                  surfaceRect.width() - margins().left() - margins().right(),
+                                  margins().top() + m_titlebarRadius);
+        } else {
+            highlightRect.addRoundedRect(m_borderWidth, m_borderWidth,
+                                         surfaceRect.width() - margins().left() - margins().right(),
+                                         margins().top() + m_titlebarRadius,
+                                         m_titlebarRadius, m_titlebarRadius);
+        }
+        p.fillPath(highlightRect.simplified(), active ? m_highlightColor : m_highlightInactiveColor);
+    }
+
     // Title bar
     QPainterPath roundedRect;
-    if ((window()->windowStates() & Qt::WindowMaximized))
-        roundedRect.addRect(1, 1, surfaceRect.width() - margins().left() - margins().right(), margins().top() + 8);
-    else
-        roundedRect.addRoundedRect(1, 1, surfaceRect.width() - margins().left() - margins().right(), margins().top() + 8, 8, 8);
+    if ((window()->windowStates() & Qt::WindowMaximized)) {
+        roundedRect.addRect(m_borderWidth, m_borderWidth + m_highlightWidth,
+                            surfaceRect.width() - margins().left() - margins().right(),
+                            margins().top() + m_titlebarRadius);
+    } else {
+        roundedRect.addRoundedRect(m_borderWidth, m_borderWidth + m_highlightWidth,
+                                   surfaceRect.width() - margins().left() - margins().right(),
+                                   margins().top() + m_titlebarRadius,
+                                   m_titlebarRadius, m_titlebarRadius);
+    }
 
-    QLinearGradient gradient(margins().left(), margins().top() + 6, margins().left(), 1);
+    QLinearGradient gradient(margins().left(), margins().top() + m_titlebarRadius - 2 * m_borderWidth,
+                             margins().left(), m_borderWidth + m_highlightWidth);
     gradient.setColorAt(0, active ? m_backgroundColorStart : m_backgroundInactiveColor);
     gradient.setColorAt(1, active ? m_backgroundColorEnd : m_backgroundInactiveColor);
     p.fillPath(roundedRect.simplified(), gradient);
